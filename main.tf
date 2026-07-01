@@ -18,6 +18,7 @@ resource "google_compute_subnetwork" "subnet" {
   network                  = var.network
   ip_cidr_range            = var.subnet_cidr
   private_ip_google_access = var.private_ip_google_access
+  labels                   = var.tags
 
   description = "STRATUM ${var.environment} subnet — managed by OpenTofu (stratum-factory-gcp-subnet)"
 
