@@ -36,3 +36,13 @@ output "subnet_cidr" {
   EOT
   value       = google_compute_subnetwork.subnet.ip_cidr_range
 }
+
+output "secondary_ip_range_names" {
+  description = <<-EOT
+    List of secondary IP range names configured on the subnetwork.
+    Type: list(string).
+    Example: ["gke-pods", "gke-services"]
+    Empty list when secondary_ip_ranges = [].
+  EOT
+  value = [for r in var.secondary_ip_ranges : r.range_name]
+}

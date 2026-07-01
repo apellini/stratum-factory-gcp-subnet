@@ -21,6 +21,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const validNetwork = "https://www.googleapis.com/compute/v1/projects/stratum-dev-sandbox/global/networks/stratum-dev-vpc"
+
 func moduleDir(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs("..")
@@ -40,15 +42,15 @@ func tofuOptions(t *testing.T, vars map[string]interface{}) *terraform.Options {
 
 func printReport(t *testing.T, rows [][]string) {
 	t.Helper()
-	header := fmt.Sprintf("%-50s %-10s %s", "Test", "Result", "Detail")
-	sep := strings.Repeat("─", 90)
+	header := fmt.Sprintf("%-60s %-10s %s", "Test", "Result", "Detail")
+	sep := strings.Repeat("─", 100)
 	t.Log("\n" + sep)
 	t.Log("  STRATUM-FACTORY — GCP Subnet Module Test Report")
 	t.Log(sep)
 	t.Log(header)
 	t.Log(sep)
 	for _, row := range rows {
-		t.Logf("  %-50s %-10s %s", row[0], row[1], row[2])
+		t.Logf("  %-60s %-10s %s", row[0], row[1], row[2])
 	}
 	t.Log(sep)
 	if summaryFile := os.Getenv("GITHUB_STEP_SUMMARY"); summaryFile != "" {
@@ -66,6 +68,7 @@ func printReport(t *testing.T, rows [][]string) {
 	}
 }
 
+// TestSubnetValidate verifies that tofu validate succeeds for valid inputs.
 func TestSubnetValidate(t *testing.T) {
 	t.Parallel()
 	opts := tofuOptions(t, map[string]interface{}{
@@ -73,7 +76,7 @@ func TestSubnetValidate(t *testing.T) {
 		"project_id":  "stratum-dev-sandbox",
 		"region":      "europe-west1",
 		"name_prefix": "stratum-dev",
-		"network":     "https://www.googleapis.com/compute/v1/projects/stratum-dev-sandbox/global/networks/stratum-dev-vpc",
+		"network":     validNetwork,
 		"subnet_cidr": "10.100.0.0/24",
 	})
 	terraform.Init(t, opts)
@@ -86,6 +89,34 @@ func TestSubnetValidate(t *testing.T) {
 	require.NoError(t, err, "tofu validate must pass for valid inputs")
 }
 
+// TestSubnetValidateWithSecondaryRange verifies validate succeeds with a secondary IP range.
+func TestSubnetValidateWithSecondaryRange(t *testing.T) {
+	t.Parallel()
+	opts := tofuOptions(t, map[string]interface{}{
+		"environment": "dev",
+		"project_id":  "stratum-dev-sandbox",
+		"region":      "europe-west1",
+		"name_prefix": "stratum-dev",
+		"network":     validNetwork,
+		"subnet_cidr": "10.100.0.0/24",
+		"secondary_ip_ranges": []interface{}{
+			map[string]interface{}{
+				"range_name":    "gke-pods",
+				"ip_cidr_range": "10.101.0.0/16",
+			},
+		},
+	})
+	terraform.Init(t, opts)
+	_, err := terraform.RunTerraformCommandE(t, opts, "validate")
+	result, detail := "✅ PASS", "validate completed with secondary IP range"
+	if err != nil {
+		result, detail = "❌ FAIL", err.Error()
+	}
+	printReport(t, [][]string{{"SubnetValidateWithSecondaryRange", result, detail}})
+	require.NoError(t, err, "tofu validate must pass with a valid secondary IP range")
+}
+
+// TestSubnetRejectsInvalidEnvironment verifies that an invalid environment is rejected.
 func TestSubnetRejectsInvalidEnvironment(t *testing.T) {
 	t.Parallel()
 	opts := tofuOptions(t, map[string]interface{}{
@@ -93,7 +124,7 @@ func TestSubnetRejectsInvalidEnvironment(t *testing.T) {
 		"project_id":  "stratum-dev-sandbox",
 		"region":      "europe-west1",
 		"name_prefix": "stratum-dev",
-		"network":     "https://www.googleapis.com/compute/v1/projects/stratum-dev-sandbox/global/networks/stratum-dev-vpc",
+		"network":     validNetwork,
 		"subnet_cidr": "10.100.0.0/24",
 	})
 	_, err := terraform.InitAndPlanE(t, opts)
@@ -105,6 +136,7 @@ func TestSubnetRejectsInvalidEnvironment(t *testing.T) {
 	assert.Error(t, err, "must reject environment='production'")
 }
 
+// TestSubnetRejectsInvalidRegion verifies that a malformed region is rejected.
 func TestSubnetRejectsInvalidRegion(t *testing.T) {
 	t.Parallel()
 	opts := tofuOptions(t, map[string]interface{}{
@@ -112,7 +144,7 @@ func TestSubnetRejectsInvalidRegion(t *testing.T) {
 		"project_id":  "stratum-dev-sandbox",
 		"region":      "us east 1",
 		"name_prefix": "stratum-dev",
-		"network":     "https://www.googleapis.com/compute/v1/projects/stratum-dev-sandbox/global/networks/stratum-dev-vpc",
+		"network":     validNetwork,
 		"subnet_cidr": "10.100.0.0/24",
 	})
 	_, err := terraform.InitAndPlanE(t, opts)
@@ -124,6 +156,7 @@ func TestSubnetRejectsInvalidRegion(t *testing.T) {
 	assert.Error(t, err, "must reject region with spaces")
 }
 
+// TestSubnetRejectsInvalidSubnetCidr verifies that a malformed CIDR is rejected.
 func TestSubnetRejectsInvalidSubnetCidr(t *testing.T) {
 	t.Parallel()
 	opts := tofuOptions(t, map[string]interface{}{
@@ -131,7 +164,7 @@ func TestSubnetRejectsInvalidSubnetCidr(t *testing.T) {
 		"project_id":  "stratum-dev-sandbox",
 		"region":      "europe-west1",
 		"name_prefix": "stratum-dev",
-		"network":     "https://www.googleapis.com/compute/v1/projects/stratum-dev-sandbox/global/networks/stratum-dev-vpc",
+		"network":     validNetwork,
 		"subnet_cidr": "not-a-cidr",
 	})
 	_, err := terraform.InitAndPlanE(t, opts)
@@ -143,6 +176,7 @@ func TestSubnetRejectsInvalidSubnetCidr(t *testing.T) {
 	assert.Error(t, err, "must reject subnet_cidr='not-a-cidr'")
 }
 
+// TestSubnetRejectsInvalidNamePrefix verifies that a name_prefix starting with a digit is rejected.
 func TestSubnetRejectsInvalidNamePrefix(t *testing.T) {
 	t.Parallel()
 	opts := tofuOptions(t, map[string]interface{}{
@@ -150,7 +184,7 @@ func TestSubnetRejectsInvalidNamePrefix(t *testing.T) {
 		"project_id":  "stratum-dev-sandbox",
 		"region":      "europe-west1",
 		"name_prefix": "1bad",
-		"network":     "https://www.googleapis.com/compute/v1/projects/stratum-dev-sandbox/global/networks/stratum-dev-vpc",
+		"network":     validNetwork,
 		"subnet_cidr": "10.100.0.0/24",
 	})
 	_, err := terraform.InitAndPlanE(t, opts)
@@ -162,6 +196,59 @@ func TestSubnetRejectsInvalidNamePrefix(t *testing.T) {
 	assert.Error(t, err, "must reject name_prefix='1bad'")
 }
 
+// TestSubnetRejectsInvalidSecondaryRangeName verifies that an invalid range_name is rejected.
+func TestSubnetRejectsInvalidSecondaryRangeName(t *testing.T) {
+	t.Parallel()
+	opts := tofuOptions(t, map[string]interface{}{
+		"environment": "dev",
+		"project_id":  "stratum-dev-sandbox",
+		"region":      "europe-west1",
+		"name_prefix": "stratum-dev",
+		"network":     validNetwork,
+		"subnet_cidr": "10.100.0.0/24",
+		"secondary_ip_ranges": []interface{}{
+			map[string]interface{}{
+				"range_name":    "1bad-name",
+				"ip_cidr_range": "10.101.0.0/16",
+			},
+		},
+	})
+	_, err := terraform.InitAndPlanE(t, opts)
+	result, detail := "✅ PASS", "plan correctly rejected invalid secondary range name"
+	if err == nil {
+		result, detail = "❌ FAIL", "plan should have failed"
+	}
+	printReport(t, [][]string{{"SubnetRejectsInvalidSecondaryRangeName", result, detail}})
+	assert.Error(t, err, "must reject range_name starting with digit")
+}
+
+// TestSubnetRejectsInvalidSecondaryCidr verifies that an invalid secondary ip_cidr_range is rejected.
+func TestSubnetRejectsInvalidSecondaryCidr(t *testing.T) {
+	t.Parallel()
+	opts := tofuOptions(t, map[string]interface{}{
+		"environment": "dev",
+		"project_id":  "stratum-dev-sandbox",
+		"region":      "europe-west1",
+		"name_prefix": "stratum-dev",
+		"network":     validNetwork,
+		"subnet_cidr": "10.100.0.0/24",
+		"secondary_ip_ranges": []interface{}{
+			map[string]interface{}{
+				"range_name":    "gke-pods",
+				"ip_cidr_range": "not-a-cidr",
+			},
+		},
+	})
+	_, err := terraform.InitAndPlanE(t, opts)
+	result, detail := "✅ PASS", "plan correctly rejected invalid secondary CIDR"
+	if err == nil {
+		result, detail = "❌ FAIL", "plan should have failed"
+	}
+	printReport(t, [][]string{{"SubnetRejectsInvalidSecondaryCidr", result, detail}})
+	assert.Error(t, err, "must reject invalid ip_cidr_range for secondary range")
+}
+
+// TestNoTerraformBinary verifies that no .tf file references the `terraform` binary.
 func TestNoTerraformBinary(t *testing.T) {
 	t.Parallel()
 	tfFiles, _ := filepath.Glob("../*.tf")

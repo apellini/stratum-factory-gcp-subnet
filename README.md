@@ -1,16 +1,18 @@
 # Factory Module: `stratum-factory-gcp-subnet`
 
-Provisions a GCP regional subnetwork for the STRATUM platform.
+Provisions a GCP regional subnetwork for the STRATUM platform, with optional secondary IP ranges.
 
 ## Purpose
 
-Creates a `google_compute_subnetwork` within an existing VPC. The Wrapper passes the VPC `self_link` as the `network` input. The subnet's `self_link` is passed downstream to GCE instance modules.
+Creates a `google_compute_subnetwork` within an existing VPC. Secondary IP ranges (e.g. for GKE
+pods and services) can be added via the `secondary_ip_ranges` input. When `secondary_ip_ranges`
+is empty (the default), no secondary ranges are configured.
 
 ## Usage
 
 ```hcl
 module "dev_subnet" {
-  source = "git::https://github.com/apellini/stratum-factory-gcp-subnet.git?ref=v0.1.0"
+  source = "git::https://github.com/apellini/stratum-factory-gcp-subnet.git?ref=v0.2.0"
 
   environment              = "dev"
   project_id               = "stratum-dev-sandbox"
@@ -20,6 +22,12 @@ module "dev_subnet" {
   subnet_cidr              = "10.100.0.0/24"
   private_ip_google_access = true
   tags                     = { environment = "dev", managed_by = "opentofu" }
+
+  # Optional: secondary IP ranges (e.g. for GKE)
+  secondary_ip_ranges = [
+    { range_name = "gke-pods",     ip_cidr_range = "10.101.0.0/16" },
+    { range_name = "gke-services", ip_cidr_range = "10.102.0.0/20" },
+  ]
 }
 ```
 
@@ -30,11 +38,19 @@ module "dev_subnet" {
 | `environment` | `string` | yes | one of `dev`, `stage`, `main` | Deployment environment |
 | `project_id` | `string` | yes | non-empty, no whitespace | GCP project ID |
 | `region` | `string` | yes | valid GCP region format | GCP region for the subnet |
-| `name_prefix` | `string` | yes | 3-24 chars, lowercase alphanumeric/hyphens, starts with letter | Resource name prefix |
+| `name_prefix` | `string` | yes | 3–24 chars, lowercase alphanumeric/hyphens, starts with letter | Resource name prefix |
 | `network` | `string` | yes | valid GCP network self-link URI | VPC self-link (from vpc module output) |
-| `subnet_cidr` | `string` | yes | valid IPv4 CIDR | IP range for the subnet |
-| `private_ip_google_access` | `bool` | optional (default: `true`) | — | Enable Private Google Access |
-| `tags` | `map(string)` | optional | all keys/values non-empty | Labels applied to all resources |
+| `subnet_cidr` | `string` | yes | valid IPv4 CIDR | Primary IP range for the subnet |
+| `private_ip_google_access` | `bool` | optional (default `true`) | — | Enable Private Google Access |
+| `secondary_ip_ranges` | `list(object)` | optional (default `[]`) | see below | Secondary IP ranges |
+| `tags` | `map(string)` | optional (default `{}`) | all keys/values non-empty | Labels applied to all resources |
+
+### `secondary_ip_ranges` object attributes
+
+| Attribute | Type | Validation | Description |
+|-----------|------|------------|-------------|
+| `range_name` | `string` | lowercase letters/digits/hyphens, starts and ends with letter or digit | Name for the secondary range |
+| `ip_cidr_range` | `string` | valid IPv4 CIDR | CIDR block for this secondary range |
 
 ## Outputs
 
@@ -43,7 +59,8 @@ module "dev_subnet" {
 | `subnet_id` | `string` | Unique identifier of the subnetwork |
 | `subnet_name` | `string` | Name of the subnetwork |
 | `subnet_self_link` | `string` | Self-link URI — pass to GCE instance modules |
-| `subnet_cidr` | `string` | IP CIDR range of the subnetwork |
+| `subnet_cidr` | `string` | Primary IP CIDR range of the subnetwork |
+| `secondary_ip_range_names` | `list(string)` | Names of secondary IP ranges configured |
 
 ## Factory rules applied
 
@@ -56,5 +73,5 @@ module "dev_subnet" {
 ## Release
 
 ```hcl
-source = "git::https://github.com/apellini/stratum-factory-gcp-subnet.git?ref=v0.1.0"
+source = "git::https://github.com/apellini/stratum-factory-gcp-subnet.git?ref=v0.2.0"
 ```
