@@ -79,3 +79,38 @@ variable "tags" {
     error_message = "All tag keys and values must be non-empty strings."
   }
 }
+
+variable "secondary_ip_ranges" {
+  description = <<-EOT
+    List of secondary IP ranges to add to the subnetwork. Each entry maps to one
+    secondary_ip_range block in google_compute_subnetwork. Useful for GKE pod/service CIDR
+    ranges or other address spaces that need to be allocated within the subnet.
+
+    Attributes:
+      range_name    - (required) Name for the secondary range. Lowercase letters, digits, hyphens; starts and ends with a letter or digit.
+      ip_cidr_range - (required) IPv4 CIDR block for this secondary range.
+
+    Default [] — no secondary ranges added when empty.
+  EOT
+  type = list(object({
+    range_name    = string
+    ip_cidr_range = string
+  }))
+  default = []
+
+  validation {
+    condition = alltrue([
+      for r in var.secondary_ip_ranges :
+      can(regex("^[a-z]([a-z0-9-]*[a-z0-9])?$", r.range_name))
+    ])
+    error_message = "Each secondary range range_name must start with a lowercase letter, end with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens."
+  }
+
+  validation {
+    condition = alltrue([
+      for r in var.secondary_ip_ranges :
+      can(regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$", r.ip_cidr_range))
+    ])
+    error_message = "Each secondary range ip_cidr_range must be a valid IPv4 CIDR block (e.g. \"10.101.0.0/16\")."
+  }
+}
