@@ -44,5 +44,5 @@ output "secondary_ip_range_names" {
     Example: ["gke-pods", "gke-services"]
     Empty list when secondary_ip_ranges = [].
   EOT
-  value = [for r in var.secondary_ip_ranges : r.range_name]
+  value       = [for r in var.secondary_ip_ranges : r.range_name]
 }
